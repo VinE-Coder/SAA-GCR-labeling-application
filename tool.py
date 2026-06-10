@@ -1,16 +1,15 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import gdown
 
 st.set_page_config(
-    page_title="SAA Labeling Tool",
+    page_title="SAA Manual Labeling Tool",
     layout="wide"
 )
 
 # -------------------------
-# DATA
+# LOAD DATA
 # -------------------------
 
 @st.cache_data
@@ -50,7 +49,7 @@ if "completed_days" not in st.session_state:
     st.session_state.completed_days = set()
 
 # -------------------------
-# TITLE
+# HEADER
 # -------------------------
 
 st.title("SAA Manual Labeling Tool")
@@ -60,26 +59,30 @@ annotator = st.text_input(
 )
 
 # -------------------------
-# DAY HANDLING
+# DATE COLUMN
 # -------------------------
 
 df["date"] = df["UTC"].dt.date
 
 days = sorted(df["date"].unique())
 
+# -------------------------
+# DAY NAVIGATION
+# -------------------------
+
 if "day_index" not in st.session_state:
     st.session_state.day_index = 0
 
-col_prev, col_next = st.columns(2)
+nav1, nav2 = st.columns(2)
 
-with col_prev:
+with nav1:
     if st.button("Previous Day"):
         st.session_state.day_index = max(
             0,
             st.session_state.day_index - 1
         )
 
-with col_next:
+with nav2:
     if st.button("Next Day"):
         st.session_state.day_index = min(
             len(days) - 1,
@@ -90,7 +93,7 @@ selected_day = days[
     st.session_state.day_index
 ]
 
-st.write(f"Current Day: {selected_day}")
+st.subheader(f"Current Day: {selected_day}")
 
 # -------------------------
 # PROGRESS
@@ -101,8 +104,8 @@ completed = len(
 )
 
 st.metric(
-    "Days Completed",
-    f"{completed}/10"
+    "Progress",
+    f"{completed}/10 Days"
 )
 
 st.progress(
@@ -114,20 +117,30 @@ st.progress(
 # -------------------------
 
 st.info("""
-Instructions
+How to Label an SAA Pass
 
-1. Use Previous Day / Next Day to navigate.
-2. Inspect the radiation flux graph.
-3. Identify SAA regions.
-4. Enter start and end UTC times.
-5. Save the label.
-6. Mark the day complete.
-7. Continue until you complete roughly 10 days.
+1. Look for a large radiation peak on the graph.
+2. Identify where the SAA pass begins.
+3. Identify where the SAA pass ends.
+4. Enter the UTC timestamps.
+5. Click Save Label.
 
-Example Format
+Timestamp Format
 
-2020-10-17 17:02:00+00:00
-2020-10-17 17:14:00+00:00
+YYYY-MM-DD HH:MM:SS
+
+Example
+
+2020-10-17 17:02:00
+
+2020-10-17 17:14:00
+
+Rules
+
+• Use UTC timestamps only.
+• Start time must be before end time.
+• One row = one SAA pass.
+• Multiple passes can be labeled on the same day.
 """)
 
 # -------------------------
@@ -141,7 +154,7 @@ day_df = df[
 plot_df = day_df.iloc[::10]
 
 # -------------------------
-# NASA TOGGLE
+# NASA OVERLAY
 # -------------------------
 
 show_nasa = st.checkbox(
@@ -150,7 +163,7 @@ show_nasa = st.checkbox(
 )
 
 # -------------------------
-# GRAPH
+# PLOT
 # -------------------------
 
 fig = go.Figure()
@@ -183,8 +196,7 @@ fig.update_layout(
     height=700,
     yaxis_type="log",
     xaxis_title="UTC",
-    yaxis_title="Flux",
-    dragmode="zoom"
+    yaxis_title="Flux"
 )
 
 st.plotly_chart(
@@ -203,28 +215,56 @@ col1, col2 = st.columns(2)
 with col1:
     start_time = st.text_input(
         "Start Time UTC",
-        placeholder="2020-10-17 17:02:00+00:00"
+        placeholder="2020-10-17 17:02:00"
     )
 
 with col2:
     end_time = st.text_input(
         "End Time UTC",
-        placeholder="2020-10-17 17:14:00+00:00"
+        placeholder="2020-10-17 17:14:00"
     )
 
 if st.button("Save Label"):
 
-    st.session_state.labels.append(
-        {
-            "annotator": annotator,
-            "date": str(selected_day),
-            "start": start_time,
-            "end": end_time,
-            "label": "SAA"
-        }
-    )
+    try:
 
-    st.success("Label Saved")
+        start_dt = pd.to_datetime(
+            start_time,
+            utc=True
+        )
+
+        end_dt = pd.to_datetime(
+            end_time,
+            utc=True
+        )
+
+        if start_dt >= end_dt:
+
+            st.error(
+                "Start time must be before end time."
+            )
+
+        else:
+
+            st.session_state.labels.append(
+                {
+                    "annotator": annotator,
+                    "date": str(selected_day),
+                    "start": start_dt.isoformat(),
+                    "end": end_dt.isoformat(),
+                    "label": "SAA"
+                }
+            )
+
+            st.success(
+                "Label Saved"
+            )
+
+    except:
+
+        st.error(
+            "Invalid timestamp format. Use YYYY-MM-DD HH:MM:SS"
+        )
 
 # -------------------------
 # COMPLETE DAY
@@ -237,7 +277,7 @@ if st.button("Mark Day Complete"):
     )
 
     st.success(
-        f"{selected_day} marked complete"
+        f"{selected_day} marked complete."
     )
 
 # -------------------------
@@ -276,7 +316,14 @@ if len(st.session_state.completed_days) > 0:
 
     st.subheader("Completed Days")
 
-    for day in sorted(
-        st.session_state.completed_days
-    ):
-        st.write(day)
+    completed_df = pd.DataFrame(
+        sorted(
+            st.session_state.completed_days
+        ),
+        columns=["Day"]
+    )
+
+    st.dataframe(
+        completed_df,
+        use_container_width=True
+    )
