@@ -1,7 +1,7 @@
-import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import gdown
+import streamlit as st
 
 st.set_page_config(
     page_title="SAA Manual Labeling Tool",
@@ -48,119 +48,116 @@ if "labels" not in st.session_state:
 if "completed_days" not in st.session_state:
     st.session_state.completed_days = set()
 
+if "day_index" not in st.session_state:
+    st.session_state.day_index = 0
+
 # -------------------------
 # HEADER
 # -------------------------
 
 st.title("SAA Manual Labeling Tool")
 
-annotator = st.text_input(
-    "Volunteer Name"
-)
+annotator = st.text_input("Volunteer Name")
 
 # -------------------------
 # DATE COLUMN
 # -------------------------
 
 df["date"] = df["UTC"].dt.date
-
 days = sorted(df["date"].unique())
+
+selected_day = days[st.session_state.day_index]
 
 # -------------------------
 # DAY NAVIGATION
 # -------------------------
 
-if "day_index" not in st.session_state:
-    st.session_state.day_index = 0
-
 nav1, nav2 = st.columns(2)
 
 with nav1:
     if st.button("Previous Day"):
-        st.session_state.day_index = max(
-            0,
-            st.session_state.day_index - 1
-        )
+        st.session_state.day_index = max(0, st.session_state.day_index - 1)
 
 with nav2:
     if st.button("Next Day"):
-        st.session_state.day_index = min(
-            len(days) - 1,
-            st.session_state.day_index + 1
-        )
+        st.session_state.day_index = min(len(days) - 1, st.session_state.day_index + 1)
 
-selected_day = days[
-    st.session_state.day_index
-]
+# -------------------------
+# DAY DISPLAY
+# -------------------------
 
-st.subheader(f"Current Day: {selected_day}")
+st.subheader(
+    f"Day {st.session_state.day_index + 1} of {len(days)}"
+)
+
+st.write(
+    f"Date: {selected_day}"
+)
 
 # -------------------------
 # PROGRESS
 # -------------------------
 
-completed = len(
-    st.session_state.completed_days
+completed = len(st.session_state.completed_days)
+
+st.metric(
+    "Completed Days",
+    f"{completed}"
 )
 
 st.metric(
-    "Progress",
-    f"{completed}/10 Days"
+    "Volunteer Target",
+    f"{completed}/10"
 )
 
-st.progress(
-    min(completed / 10, 1.0)
-)
+st.progress(min(completed / 10, 1.0))
 
 # -------------------------
 # INSTRUCTIONS
 # -------------------------
 
 st.info("""
-How to Label an SAA Pass
+Instructions
 
-1. Look for a large radiation peak on the graph.
+1. Look for a large radiation peak.
 2. Identify where the SAA pass begins.
 3. Identify where the SAA pass ends.
-4. Enter the UTC timestamps.
+4. Enter ONLY the times below.
 5. Click Save Label.
+6. Mark the day complete when finished.
 
-Timestamp Format
+Time Format
 
-YYYY-MM-DD HH:MM:SS
+HH:MM:SS
 
-Example
+Examples
 
-2020-10-17 17:02:00
+17:02:00
+17:14:00
 
-2020-10-17 17:14:00
+The selected day is automatically added.
+Do NOT enter the date.
 
 Rules
 
-• Use UTC timestamps only.
+• Use UTC time.
 • Start time must be before end time.
 • One row = one SAA pass.
-• Multiple passes can be labeled on the same day.
+• Multiple SAA passes can be labeled on the same day.
 """)
 
 # -------------------------
 # FILTER DAY
 # -------------------------
 
-day_df = df[
-    df["date"] == selected_day
-]
-
+day_df = df[df["date"] == selected_day]
 plot_df = day_df.iloc[::10]
 
 # -------------------------
 # NASA OVERLAY
 # -------------------------
 
-show_nasa = st.checkbox(
-    "Show NASA SRAG Labels",
-    value=True
-)
+show_nasa = st.checkbox("Show NASA SRAG Labels", value=True)
 
 # -------------------------
 # PLOT
@@ -179,9 +176,7 @@ fig.add_trace(
 
 if show_nasa and "SAA" in plot_df.columns:
 
-    nasa_df = plot_df[
-        plot_df["SAA"] == 1
-    ]
+    nasa_df = plot_df[plot_df["SAA"] == 1]
 
     fig.add_trace(
         go.Scatter(
@@ -199,14 +194,13 @@ fig.update_layout(
     yaxis_title="Flux"
 )
 
-st.plotly_chart(
-    fig,
-    use_container_width=True
-)
+st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------
 # LABEL ENTRY
 # -------------------------
+
+st.write(f"Currently labeling: {selected_day}")
 
 st.subheader("Add SAA Label")
 
@@ -214,14 +208,14 @@ col1, col2 = st.columns(2)
 
 with col1:
     start_time = st.text_input(
-        "Start Time UTC",
-        placeholder="2020-10-17 17:02:00"
+        "Start Time (UTC)",
+        placeholder="17:02:00"
     )
 
 with col2:
     end_time = st.text_input(
-        "End Time UTC",
-        placeholder="2020-10-17 17:14:00"
+        "End Time (UTC)",
+        placeholder="17:14:00"
     )
 
 if st.button("Save Label"):
@@ -229,20 +223,18 @@ if st.button("Save Label"):
     try:
 
         start_dt = pd.to_datetime(
-            start_time,
+            f"{selected_day} {start_time}",
             utc=True
         )
 
         end_dt = pd.to_datetime(
-            end_time,
+            f"{selected_day} {end_time}",
             utc=True
         )
 
         if start_dt >= end_dt:
 
-            st.error(
-                "Start time must be before end time."
-            )
+            st.error("Start time must be before end time.")
 
         else:
 
@@ -256,15 +248,11 @@ if st.button("Save Label"):
                 }
             )
 
-            st.success(
-                "Label Saved"
-            )
+            st.success("Label Saved")
 
     except:
 
-        st.error(
-            "Invalid timestamp format. Use YYYY-MM-DD HH:MM:SS"
-        )
+        st.error("Invalid time format. Use HH:MM:SS")
 
 # -------------------------
 # COMPLETE DAY
@@ -272,13 +260,9 @@ if st.button("Save Label"):
 
 if st.button("Mark Day Complete"):
 
-    st.session_state.completed_days.add(
-        str(selected_day)
-    )
+    st.session_state.completed_days.add(str(selected_day))
 
-    st.success(
-        f"{selected_day} marked complete."
-    )
+    st.success(f"{selected_day} marked complete.")
 
 # -------------------------
 # SAVED LABELS
@@ -286,20 +270,15 @@ if st.button("Mark Day Complete"):
 
 st.subheader("Saved Labels")
 
-labels_df = pd.DataFrame(
-    st.session_state.labels
-)
+labels_df = pd.DataFrame(st.session_state.labels)
 
 if len(labels_df) > 0:
 
-    st.dataframe(
-        labels_df,
-        use_container_width=True
-    )
+    st.write(f"Total Labels: {len(st.session_state.labels)}")
 
-    csv = labels_df.to_csv(
-        index=False
-    ).encode()
+    st.dataframe(labels_df, use_container_width=True)
+
+    csv = labels_df.to_csv(index=False).encode()
 
     st.download_button(
         "Download Labels CSV",
@@ -317,13 +296,8 @@ if len(st.session_state.completed_days) > 0:
     st.subheader("Completed Days")
 
     completed_df = pd.DataFrame(
-        sorted(
-            st.session_state.completed_days
-        ),
+        sorted(st.session_state.completed_days),
         columns=["Day"]
     )
 
-    st.dataframe(
-        completed_df,
-        use_container_width=True
-    )
+    st.dataframe(completed_df, use_container_width=True)
