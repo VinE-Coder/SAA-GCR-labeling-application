@@ -54,6 +54,9 @@ if "day_index" not in st.session_state:
 if "click_times" not in st.session_state:
     st.session_state.click_times = []
 
+if "edit_index" not in st.session_state:
+    st.session_state.edit_index = None
+
 # -------------------------
 # HEADER
 # -------------------------
@@ -72,7 +75,7 @@ days = sorted(df["date"].unique())
 selected_day = days[st.session_state.day_index]
 
 # -------------------------
-# DAY NAVIGATION
+# NAVIGATION
 # -------------------------
 
 nav1, nav2 = st.columns(2)
@@ -91,13 +94,8 @@ with nav2:
 # DAY DISPLAY
 # -------------------------
 
-st.subheader(
-    f"Day {st.session_state.day_index + 1} of {len(days)}"
-)
-
-st.write(
-    f"Date: {selected_day}"
-)
+st.subheader(f"Day {st.session_state.day_index + 1} of {len(days)}")
+st.write(f"Date: {selected_day}")
 
 # -------------------------
 # PROGRESS
@@ -116,19 +114,18 @@ st.progress(min(completed / 10, 1.0))
 st.info("""
 Instructions
 
-1. Click ONCE on the graph → Start SAA pass
-2. Click AGAIN → End SAA pass
-3. Click Save Label
-4. Mark day complete when finished
+1. Click ONCE on graph → start SAA pass  
+2. Click AGAIN → end SAA pass  
+3. Save label  
+4. Edit/delete if wrong  
 
-Rules
-• Use UTC data
-• One click = one timestamp
-• Two clicks = one SAA interval
+Rules:
+• Two clicks = one interval  
+• UTC data  
 """)
 
 # -------------------------
-# FILTER DAY
+# FILTER DATA
 # -------------------------
 
 day_df = df[df["date"] == selected_day]
@@ -156,7 +153,6 @@ fig.add_trace(
 )
 
 if show_nasa and "SAA" in plot_df.columns:
-
     nasa_df = plot_df[plot_df["SAA"] == 1]
 
     fig.add_trace(
@@ -175,27 +171,23 @@ fig.update_layout(
     yaxis_title="Flux"
 )
 
-# -------------------------
-# CLICK HANDLING
-# -------------------------
-
 event = st.plotly_chart(
     fig,
     use_container_width=True,
     on_select="rerun"
 )
 
-# Streamlit click extraction (robust handling)
+# -------------------------
+# CLICK HANDLING
+# -------------------------
+
 if event is not None:
     try:
-        selection = event["selection"]["points"]
+        points = event["selection"]["points"]
 
-        for p in selection:
-            clicked_time = p["x"]
-
+        for p in points:
             if len(st.session_state.click_times) < 2:
-                st.session_state.click_times.append(clicked_time)
-
+                st.session_state.click_times.append(p["x"])
     except:
         pass
 
@@ -213,13 +205,11 @@ elif len(st.session_state.click_times) == 2:
         f"Start: {st.session_state.click_times[0]} | End: {st.session_state.click_times[1]}"
     )
 else:
-    st.write("Click two points on the graph")
+    st.write("Click two points on graph")
 
 # -------------------------
-# LABEL ENTRY
+# SAVE LABEL
 # -------------------------
-
-st.write(f"Currently labeling: {selected_day}")
 
 st.subheader("Add SAA Label")
 
@@ -227,14 +217,14 @@ if st.button("Save Label"):
 
     try:
         if len(st.session_state.click_times) != 2:
-            st.error("Click start and end points first.")
+            st.error("Click 2 points first")
             st.stop()
 
         start_dt = pd.to_datetime(st.session_state.click_times[0], utc=True)
         end_dt = pd.to_datetime(st.session_state.click_times[1], utc=True)
 
         if start_dt >= end_dt:
-            st.error("Start time must be before end time.")
+            st.error("Start must be before end")
 
         else:
             st.session_state.labels.append(
@@ -248,35 +238,68 @@ if st.button("Save Label"):
             )
 
             st.success("Label Saved")
-
-            # reset clicks
             st.session_state.click_times = []
 
     except:
-        st.error("Click selection error.")
+        st.error("Error saving label")
 
 # -------------------------
 # COMPLETE DAY
 # -------------------------
 
 if st.button("Mark Day Complete"):
-
     st.session_state.completed_days.add(str(selected_day))
-    st.success(f"{selected_day} marked complete.")
+    st.success("Day completed")
 
 # -------------------------
-# SAVED LABELS
+# LABEL MANAGEMENT (EDIT / DELETE)
 # -------------------------
 
 st.subheader("Saved Labels")
 
-labels_df = pd.DataFrame(st.session_state.labels)
+if len(st.session_state.labels) > 0:
 
-if len(labels_df) > 0:
+    labels_df = pd.DataFrame(st.session_state.labels)
 
     st.write(f"Total Labels: {len(st.session_state.labels)}")
-
     st.dataframe(labels_df, use_container_width=True)
+
+    label_options = [
+        f"{i}: {l['date']} | {l['start']} → {l['end']}"
+        for i, l in enumerate(st.session_state.labels)
+    ]
+
+    selected_label = st.selectbox(
+        "Select label to edit/delete",
+        options=label_options
+    )
+
+    idx = int(selected_label.split(":")[0])
+
+    st.session_state.edit_index = idx
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Delete Label"):
+            st.session_state.labels.pop(idx)
+            st.success("Deleted")
+
+    with col2:
+        if st.button("Update Using Clicks"):
+
+            if len(st.session_state.click_times) != 2:
+                st.error("Click 2 points first")
+                st.stop()
+
+            start_dt = pd.to_datetime(st.session_state.click_times[0], utc=True)
+            end_dt = pd.to_datetime(st.session_state.click_times[1], utc=True)
+
+            st.session_state.labels[idx]["start"] = start_dt.isoformat()
+            st.session_state.labels[idx]["end"] = end_dt.isoformat()
+
+            st.success("Updated")
+            st.session_state.click_times = []
 
     csv = labels_df.to_csv(index=False).encode()
 
