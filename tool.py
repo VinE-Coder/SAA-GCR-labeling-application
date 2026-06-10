@@ -51,6 +51,9 @@ if "completed_days" not in st.session_state:
 if "day_index" not in st.session_state:
     st.session_state.day_index = 0
 
+if "click_times" not in st.session_state:
+    st.session_state.click_times = []
+
 # -------------------------
 # HEADER
 # -------------------------
@@ -77,10 +80,12 @@ nav1, nav2 = st.columns(2)
 with nav1:
     if st.button("Previous Day"):
         st.session_state.day_index = max(0, st.session_state.day_index - 1)
+        st.session_state.click_times = []
 
 with nav2:
     if st.button("Next Day"):
         st.session_state.day_index = min(len(days) - 1, st.session_state.day_index + 1)
+        st.session_state.click_times = []
 
 # -------------------------
 # DAY DISPLAY
@@ -100,16 +105,8 @@ st.write(
 
 completed = len(st.session_state.completed_days)
 
-st.metric(
-    "Completed Days",
-    f"{completed}"
-)
-
-st.metric(
-    "Volunteer Target",
-    f"{completed}/10"
-)
-
+st.metric("Completed Days", f"{completed}")
+st.metric("Volunteer Target", f"{completed}/10")
 st.progress(min(completed / 10, 1.0))
 
 # -------------------------
@@ -119,31 +116,15 @@ st.progress(min(completed / 10, 1.0))
 st.info("""
 Instructions
 
-1. Look for a large radiation peak.
-2. Identify where the SAA pass begins.
-3. Identify where the SAA pass ends.
-4. Enter ONLY the times below.
-5. Click Save Label.
-6. Mark the day complete when finished.
-
-Time Format
-
-HH:MM:SS
-
-Examples
-
-17:02:00
-17:14:00
-
-The selected day is automatically added.
-Do NOT enter the date.
+1. Click ONCE on the graph → Start SAA pass
+2. Click AGAIN → End SAA pass
+3. Click Save Label
+4. Mark day complete when finished
 
 Rules
-
-• Use UTC time.
-• Start time must be before end time.
-• One row = one SAA pass.
-• Multiple SAA passes can be labeled on the same day.
+• Use UTC data
+• One click = one timestamp
+• Two clicks = one SAA interval
 """)
 
 # -------------------------
@@ -194,7 +175,45 @@ fig.update_layout(
     yaxis_title="Flux"
 )
 
-st.plotly_chart(fig, use_container_width=True)
+# -------------------------
+# CLICK HANDLING
+# -------------------------
+
+event = st.plotly_chart(
+    fig,
+    use_container_width=True,
+    on_select="rerun"
+)
+
+# Streamlit click extraction (robust handling)
+if event is not None:
+    try:
+        selection = event["selection"]["points"]
+
+        for p in selection:
+            clicked_time = p["x"]
+
+            if len(st.session_state.click_times) < 2:
+                st.session_state.click_times.append(clicked_time)
+
+    except:
+        pass
+
+# -------------------------
+# SHOW SELECTION
+# -------------------------
+
+st.subheader("Current Selection")
+
+if len(st.session_state.click_times) == 1:
+    st.info(f"Start: {st.session_state.click_times[0]}")
+
+elif len(st.session_state.click_times) == 2:
+    st.success(
+        f"Start: {st.session_state.click_times[0]} | End: {st.session_state.click_times[1]}"
+    )
+else:
+    st.write("Click two points on the graph")
 
 # -------------------------
 # LABEL ENTRY
@@ -204,40 +223,20 @@ st.write(f"Currently labeling: {selected_day}")
 
 st.subheader("Add SAA Label")
 
-col1, col2 = st.columns(2)
-
-with col1:
-    start_time = st.text_input(
-        "Start Time (UTC)",
-        placeholder="17:02:00"
-    )
-
-with col2:
-    end_time = st.text_input(
-        "End Time (UTC)",
-        placeholder="17:14:00"
-    )
-
 if st.button("Save Label"):
 
     try:
+        if len(st.session_state.click_times) != 2:
+            st.error("Click start and end points first.")
+            st.stop()
 
-        start_dt = pd.to_datetime(
-            f"{selected_day} {start_time}",
-            utc=True
-        )
-
-        end_dt = pd.to_datetime(
-            f"{selected_day} {end_time}",
-            utc=True
-        )
+        start_dt = pd.to_datetime(st.session_state.click_times[0], utc=True)
+        end_dt = pd.to_datetime(st.session_state.click_times[1], utc=True)
 
         if start_dt >= end_dt:
-
             st.error("Start time must be before end time.")
 
         else:
-
             st.session_state.labels.append(
                 {
                     "annotator": annotator,
@@ -250,9 +249,11 @@ if st.button("Save Label"):
 
             st.success("Label Saved")
 
-    except:
+            # reset clicks
+            st.session_state.click_times = []
 
-        st.error("Invalid time format. Use HH:MM:SS")
+    except:
+        st.error("Click selection error.")
 
 # -------------------------
 # COMPLETE DAY
@@ -261,7 +262,6 @@ if st.button("Save Label"):
 if st.button("Mark Day Complete"):
 
     st.session_state.completed_days.add(str(selected_day))
-
     st.success(f"{selected_day} marked complete.")
 
 # -------------------------
