@@ -54,6 +54,9 @@ if "day_index" not in st.session_state:
 if "click_times" not in st.session_state:
     st.session_state.click_times = []
 
+if "clearing" not in st.session_state:
+    st.session_state.clearing = False
+
 if "manual_start" not in st.session_state:
     st.session_state.manual_start = ""
 
@@ -147,12 +150,11 @@ plot_df = day_df.iloc[::10]
 show_nasa = st.checkbox("Show NASA SRAG Labels", value=True)
 
 # -------------------------
-# PLOT (CLICK ANYWHERE FIX)
+# PLOT
 # -------------------------
 
 fig = go.Figure()
 
-# 🔥 KEY FIX: invisible markers make whole line clickable
 fig.add_trace(
     go.Scatter(
         x=plot_df["UTC"],
@@ -160,7 +162,7 @@ fig.add_trace(
         mode="lines+markers",
         marker=dict(
             size=6,
-            opacity=0   # invisible click layer
+            opacity=0
         ),
         line=dict(width=2),
         name="Flux"
@@ -197,20 +199,20 @@ event = st.plotly_chart(
     on_select="rerun"
 )
 
-# extract click (works via selected points)
-if event is not None:
+# If we just cleared, skip processing the stale event
+if st.session_state.clearing:
+    st.session_state.clearing = False
+elif event is not None:
     try:
         points = event["selection"]["points"]
-
         for p in points:
             if len(st.session_state.click_times) < 2:
                 st.session_state.click_times.append(p["x"])
-
     except:
         pass
 
 # -------------------------
-# SHOW SELECTION
+# CURRENT SELECTION
 # -------------------------
 
 st.subheader("Current Selection")
@@ -228,68 +230,12 @@ else:
 
 if st.button("Clear Selection"):
     st.session_state.click_times = []
+    st.session_state.clearing = True
     st.rerun()
 
 # -------------------------
-# SAVE LABEL
+# ADD SAA LABEL (CLICK)
 # -------------------------
-
-st.subheader("Manual Label Entry (Optional)")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    manual_start = st.text_input(
-        "Start Time (UTC)",
-        key="manual_start",
-        placeholder="17:02:00"
-    )
-
-with col2:
-    manual_end = st.text_input(
-        "End Time (UTC)",
-        key="manual_end",
-        placeholder="17:14:00"
-    )
-
-if st.button("Save Manual Label"):
-
-    try:
-
-        start_dt = pd.to_datetime(
-            f"{selected_day} {manual_start}",
-            utc=True
-        )
-
-        end_dt = pd.to_datetime(
-            f"{selected_day} {manual_end}",
-            utc=True
-        )
-
-        if start_dt >= end_dt:
-            st.error("Start must be before end")
-
-        else:
-
-            st.session_state.labels.append(
-                {
-                    "annotator": annotator,
-                    "date": str(selected_day),
-                    "start": start_dt.isoformat(),
-                    "end": end_dt.isoformat(),
-                    "label": "SAA"
-                }
-            )
-
-            st.session_state.click_times = []
-            st.session_state.manual_start = ""
-            st.session_state.manual_end = ""
-
-            st.success("Manual Label Saved")
-            st.rerun()
-
-    except:
-        st.error("Use HH:MM:SS format")
 
 st.subheader("Add SAA Label")
 
@@ -318,6 +264,7 @@ if st.button("Save Label"):
             )
 
             st.session_state.click_times = []
+            st.session_state.clearing = True
 
             st.success("Label Saved")
 
@@ -325,6 +272,69 @@ if st.button("Save Label"):
 
     except:
         st.error("Error saving label")
+
+# -------------------------
+# MANUAL LABEL ENTRY (TOGGLE)
+# -------------------------
+
+show_manual = st.toggle("Enter times manually instead")
+
+if show_manual:
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        manual_start = st.text_input(
+            "Start Time (UTC)",
+            key="manual_start",
+            placeholder="17:02:00"
+        )
+
+    with col2:
+        manual_end = st.text_input(
+            "End Time (UTC)",
+            key="manual_end",
+            placeholder="17:14:00"
+        )
+
+    if st.button("Save Manual Label"):
+
+        try:
+
+            start_dt = pd.to_datetime(
+                f"{selected_day} {manual_start}",
+                utc=True
+            )
+
+            end_dt = pd.to_datetime(
+                f"{selected_day} {manual_end}",
+                utc=True
+            )
+
+            if start_dt >= end_dt:
+                st.error("Start must be before end")
+
+            else:
+
+                st.session_state.labels.append(
+                    {
+                        "annotator": annotator,
+                        "date": str(selected_day),
+                        "start": start_dt.isoformat(),
+                        "end": end_dt.isoformat(),
+                        "label": "SAA"
+                    }
+                )
+
+                st.session_state.click_times = []
+                st.session_state.manual_start = ""
+                st.session_state.manual_end = ""
+
+                st.success("Manual Label Saved")
+                st.rerun()
+
+        except:
+            st.error("Use HH:MM:SS format")
 
 # -------------------------
 # COMPLETE DAY
