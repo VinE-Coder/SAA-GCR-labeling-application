@@ -143,6 +143,15 @@ Rules:
 day_df = df[df["date"] == selected_day]
 plot_df = day_df.iloc[::10]
 
+st.write(f"Selected Day: {selected_day}")
+
+st.write(
+    f"Time Range: {day_df['UTC'].min()} → {day_df['UTC'].max()}"
+)
+
+st.write(
+    f"Rows: {len(day_df)}"
+)
 # -------------------------
 # NASA OVERLAY
 # -------------------------
