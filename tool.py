@@ -78,8 +78,6 @@ annotator = st.text_input("Volunteer Name")
 df["date"] = df["UTC"].dt.date
 days = sorted(df["date"].unique())
 
-selected_day = days[st.session_state.day_index]
-
 # -------------------------
 # NAVIGATION
 # -------------------------
@@ -90,11 +88,16 @@ with nav1:
     if st.button("Previous Day"):
         st.session_state.day_index = max(0, st.session_state.day_index - 1)
         st.session_state.click_times = []
+        st.rerun()
 
 with nav2:
     if st.button("Next Day"):
         st.session_state.day_index = min(len(days) - 1, st.session_state.day_index + 1)
         st.session_state.click_times = []
+        st.rerun()
+
+# Compute AFTER navigation buttons so day_index is always current
+selected_day = days[st.session_state.day_index]
 
 # -------------------------
 # DAY DISPLAY
