@@ -278,12 +278,13 @@ if st.button("Save Label"):
             st.session_state.click_times = []
             st.session_state.clearing = True
 
-            st.success("Label Saved")
+           st.session_state.click_times = []
+           st.session_state.clearing = True
 
-            st.rerun()
+           st.rerun()
 
-    except:
-        st.error("Error saving label")
+except Exception as e:
+    st.error(f"Error saving label: {e}")
 
 # -------------------------
 # MANUAL LABEL ENTRY (TOGGLE)
