@@ -155,6 +155,7 @@ st.write(
 st.write(
     f"Rows: {len(day_df)}"
 )
+
 # -------------------------
 # NASA OVERLAY
 # -------------------------
@@ -220,7 +221,7 @@ elif event is not None:
         for p in points:
             if len(st.session_state.click_times) < 2:
                 st.session_state.click_times.append(p["x"])
-    except:
+    except Exception:
         pass
 
 # -------------------------
@@ -278,13 +279,10 @@ if st.button("Save Label"):
             st.session_state.click_times = []
             st.session_state.clearing = True
 
-           st.session_state.click_times = []
-           st.session_state.clearing = True
+            st.success("Label Saved")
 
-           st.rerun()
-
-except Exception as e:
-    st.error(f"Error saving label: {e}")
+    except Exception as e:
+        st.error(f"Error saving label: {e}")
 
 # -------------------------
 # MANUAL LABEL ENTRY (TOGGLE)
@@ -340,14 +338,11 @@ if show_manual:
                 )
 
                 st.session_state.click_times = []
-                st.session_state.manual_start = ""
-                st.session_state.manual_end = ""
 
                 st.success("Manual Label Saved")
-                st.rerun()
 
-        except:
-            st.error("Use HH:MM:SS format")
+        except Exception as e:
+            st.error(f"Use HH:MM:SS format ({e})")
 
 # -------------------------
 # COMPLETE DAY
